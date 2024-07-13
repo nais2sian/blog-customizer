@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import { ArrowButton } from 'components/arrow-button';
 import { Button } from 'components/button';
+import { useOutsideClickClose } from '../select/hooks/useOutsideClickClose';
 import React, { useState, useEffect, useRef } from 'react';
 import { Select } from '../select/Select';
 import { RadioGroup } from '../radio-group/RadioGroup';
@@ -19,55 +20,50 @@ import {
 import styles from './ArticleParamsForm.module.scss';
 
 interface ArticleParamsFormProps {
-	formState: ArticleStateType;
 	onApply: (newState: ArticleStateType) => void;
-	onFormChange: (key: keyof ArticleStateType, option: OptionType) => void;
 }
 
-export const ArticleParamsForm = ({
-	formState,
-	onApply,
-	onFormChange,
-}: ArticleParamsFormProps) => {
+export const ArticleParamsForm = ({ onApply }: ArticleParamsFormProps) => {
 	const [isFormVisible, setIsFormVisible] = useState(false);
+	const [formState, setFormState] = useState<ArticleStateType>(() => {
+		const savedFormState = localStorage.getItem('formState');
+		return savedFormState ? JSON.parse(savedFormState) : defaultArticleState;
+	});
 	const formRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		localStorage.setItem('formState', JSON.stringify(formState));
+	}, [formState]);
 
 	const toggleFormVisibility = () => {
 		setIsFormVisible(!isFormVisible);
 	};
 
-	const handleClickOutside = (event: MouseEvent) => {
-		if (formRef.current && !formRef.current.contains(event.target as Node)) {
-			setIsFormVisible(false);
-		}
-	};
-
-	useEffect(() => {
-		if (isFormVisible) {
-			document.addEventListener('mousedown', handleClickOutside);
-		} else {
-			document.removeEventListener('mousedown', handleClickOutside);
-		}
-		return () => {
-			document.removeEventListener('mousedown', handleClickOutside);
-		};
-	}, [isFormVisible]);
+	useOutsideClickClose({
+		isOpen: isFormVisible,
+		onChange: setIsFormVisible,
+		rootRef: formRef,
+	});
 
 	const handleSelectChange = (
 		key: keyof ArticleStateType,
 		option: OptionType
 	) => {
-		onFormChange(key, option);
+		setFormState((prevState: ArticleStateType) => ({
+			...prevState,
+			[key]: option,
+		}));
 	};
 
 	const handleReset = () => {
 		localStorage.removeItem('formState');
 		onApply(defaultArticleState);
-		onFormChange('fontFamilyOption', fontFamilyOptions[0]);
-		onFormChange('fontColor', fontColors[0]);
-		onFormChange('backgroundColor', backgroundColors[0]);
-		onFormChange('contentWidth', contentWidthArr[0]);
-		onFormChange('fontSizeOption', fontSizeOptions[0]);
+		Object.keys(defaultArticleState).forEach((key) => {
+			handleSelectChange(
+				key as keyof ArticleStateType,
+				defaultArticleState[key as keyof ArticleStateType]
+			);
+		});
 	};
 
 	const handleApply = (e: React.FormEvent<HTMLFormElement>) => {
@@ -80,9 +76,9 @@ export const ArticleParamsForm = ({
 			<ArrowButton onClick={toggleFormVisibility} isOpen={isFormVisible} />
 			<aside
 				ref={formRef}
-				className={`${styles.container} ${
-					isFormVisible ? styles.container_open : ''
-				}`}>
+				className={clsx(styles.container, {
+					[styles.container_open]: isFormVisible,
+				})}>
 				<form className={styles.form} onSubmit={handleApply}>
 					<h1 className={clsx(styles.h1, styles.uppercase)}>
 						Задайте параметры
